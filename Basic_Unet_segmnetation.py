@@ -14,7 +14,7 @@ Created on Mon Apr  5 15:01:37 2021
 #                             mult_factor=1.5)
 
 
-import os, glob
+import os
 from skimage.io import imsave
 import numpy as np
 from keras.models import Model
@@ -158,13 +158,18 @@ def get_unet():
     return model
 
 
-name = 'join_inbreast4'
+name = os.getenv('DATASET_EXPERIMENT_NAME', 'join_inbreast4')
+train_dataset_names = [ds.strip() for ds in os.getenv('TRAIN_DATASETS', 'inbreast_cycleGAN,mydata').split(',') if ds.strip()]
+test_dataset_names = [ds.strip() for ds in os.getenv('TEST_DATASETS', 'inbreast_cycleGAN,mydata').split(',') if ds.strip()]
 
-imgs_train1, imgs_mask_train1 = load_train_data('inbreast_cycleGAN')
-imgs_train2, imgs_mask_train2 = load_train_data('mydata')
+if not train_dataset_names:
+    raise ValueError('TRAIN_DATASETS is empty. Provide at least one dataset name.')
+if not test_dataset_names:
+    raise ValueError('TEST_DATASETS is empty. Provide at least one dataset name.')
 
-imgs_train = np.concatenate([imgs_train1, imgs_train2])
-imgs_mask_train = np.concatenate([imgs_mask_train1, imgs_mask_train2])
+train_sets = [load_train_data(dataset_name) for dataset_name in train_dataset_names]
+imgs_train = np.concatenate([dataset_data[0] for dataset_data in train_sets], axis=0)
+imgs_mask_train = np.concatenate([dataset_data[1] for dataset_data in train_sets], axis=0)
 
 #imgs_train, imgs_mask_train = load_train_data(name)
 
@@ -205,11 +210,9 @@ print('-'*30)
 print('Loading and preprocessing test data...')
 print('-'*30)
 
-imgs_test1, imgs_id_test1 = load_test_data('inbreast_cycleGAN')
-imgs_test2, imgs_id_test2 = load_test_data('mydata')
-
-imgs_test = np.concatenate([imgs_test1, imgs_test2])
-imgs_id_test = np.concatenate([imgs_id_test1, imgs_id_test2])
+test_sets = [load_test_data(dataset_name) for dataset_name in test_dataset_names]
+imgs_test = np.concatenate([dataset_data[0] for dataset_data in test_sets], axis=0)
+imgs_id_test = np.concatenate([dataset_data[1] for dataset_data in test_sets], axis=0)
 
 #imgs_test, imgs_id_test = load_test_data(name)
 
@@ -236,32 +239,10 @@ print('-' * 30)
 if not os.path.exists(pred_dir):
     os.mkdir(pred_dir)
 
-#data_path2 = 'D:/Files/MYDATA/Breast_Cancer-Begonya/Images/Test_Seg/'
-data_path2 = 'D:/INbreast/Test_Seg/'
-#data_path2 = 'D:/CBIS_augmented/Test_Seg/'
-#data_path2 = 'D:/CSAW-S/CsawS/Test_Seg/'
-
-d = data_path2+'roi/*.png'    
-files = glob.glob(d) 
-
-files1 = files
-
-data_path2 = 'D:/Files/MYDATA/Breast_Cancer-Begonya/Images/Test_Seg/'
-
-d = data_path2+'roi/*.png'    
-files = glob.glob(d) 
-
-files2 = files
-
-files = files1 + files2
-
-
-files = [file.split('\\')[-1][:-4] for file in files]
-idx = 0
-for image, image_id in zip(imgs_mask_test, imgs_id_test):
+for idx, image in enumerate(imgs_mask_test):
     image = (image[:, :, 0] * 255.).astype(np.uint8)
-    imsave(os.path.join(pred_dir, files[idx] + '_pred.png'), image)
-    idx = idx + 1
+    output_name = 'sample_{:04d}_pred.png'.format(idx)
+    imsave(os.path.join(pred_dir, output_name), image)
 
 imgs_id_test = imgs_id_test.astype('float32')
 imgs_id_test = imgs_id_test[..., np.newaxis]
